@@ -32,6 +32,7 @@ const mongoose = require('mongoose');
 
 const DEPARTMENTS = [
   'HR',
+  'IT',
   'SALES',
   'FINANCE',
   'MARKETING',

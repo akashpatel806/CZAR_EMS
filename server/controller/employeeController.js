@@ -54,6 +54,43 @@ exports.getProfile = async (req, res) => {
   }
 };
 
+// ✅ Update employee profile (self)
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { name, phone, department, position, dateOfBirth } = req.body;
+
+    // Find employee by userId
+    const employee = await Employee.findOne({ userId });
+    if (!employee) {
+      return res.status(404).json({ message: 'Profile not found' });
+    }
+
+    // Update only allowed fields
+    if (name) employee.name = name;
+    if (phone) employee.phone = phone;
+    if (department) employee.department = department;
+    if (position) employee.position = position;
+    if (dateOfBirth) employee.dateOfBirth = dateOfBirth;
+    employee.updatedAt = new Date();
+
+    await employee.save();
+
+    // Update user name if changed
+    if (name) {
+      await User.findByIdAndUpdate(userId, { name });
+    }
+
+    res.status(200).json({
+      message: 'Profile updated successfully',
+      employee,
+    });
+  } catch (error) {
+    console.error('Update Profile Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // ✅ Change password (for current user)
 exports.changePassword = async (req, res) => {
   try {
