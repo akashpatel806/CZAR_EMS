@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const validator = require('validator');
 const User = require('../model/userModel');
-const Employee = require('../model/employeeModel');
+const Employee = require('../utils/emailService');
 const Admin = require('../model/adminModel')
 
 
@@ -54,7 +54,6 @@ exports.register = async (req, res) => {
 
     if (role === "admin") {
       await new Admin({
-        userId: user._id,
         name,
         email,
         password: hashedPassword,

@@ -6,7 +6,6 @@ require('dotenv').config();
 const routes = require('./routes');
 const { errorHandler } = require('./middleware/errorHandler');
 const { connectToDB } = require('./config/db');
-const { checkAndResetLeaves, scheduleLeaveReset } = require('./utils/leaveResetScheduler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,12 +26,7 @@ app.use(errorHandler);
 
 const startServer = async () => {
   await connectToDB();
-  
-  // ✅ Initialize leave reset scheduler
-  await checkAndResetLeaves(); // Check and reset if needed on startup
-  scheduleLeaveReset(); // Schedule for future resets
-  
-  app.listen(PORT, () => console.log(`🚀 CzarCore server running on port ${PORT}`));
+  app.listen(PORT, () => console.log('🚀 CzarCore server running on port 5000'));
 };
 
 startServer();

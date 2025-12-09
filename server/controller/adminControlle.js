@@ -37,21 +37,39 @@ exports.getUsers = async (req, res) => {
 // ✅ Admin: Create employee (with optional admin role)
 exports.createEmployee = async (req, res) => {
   try {
+    // if (!(await ensureAdmin(req, res))) return;
+
     const {
       name,
       personalEmail,
-      phone,
       dateOfBirth,
       dateOfJoining,
       department,
       position,
       employeeId,
-      role = "Employee",
+      role = "Employee", // 👈 optional role from admin panel
     } = req.body;
 
-    // Validate required fields
-    if (!name || !phone || !personalEmail || !dateOfBirth || !dateOfJoining || !department) {
-      return res.status(400).json({ message: "Name, phone, email, DOB, joining date, and department are required" });
+    if (
+      !name ||
+      !personalEmail ||
+      !dateOfBirth ||
+      !dateOfJoining ||
+      !department ||
+      !position ||
+      !employeeId
+    ) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    // Check for existing Employee ID or Email
+    const existingEmployee = await Employee.findOne({
+      $or: [{ employeeId }, { personalEmail }],
+    });
+    if (existingEmployee) {
+      return res
+        .status(400)
+        .json({ message: "Employee with this ID or email already exists" });
     }
 
     // Generate work email & password
@@ -60,7 +78,7 @@ exports.createEmployee = async (req, res) => {
     const day = String(dob.getDate()).padStart(2, "0");
     const month = String(dob.getMonth() + 1).padStart(2, "0");
     const year = dob.getFullYear();
-    const workPassword = `${day}${month}${year}`;
+    const workPassword = `${day}${month}${year}`; // DOB-based initial password
 
     const hashedPassword = await bcrypt.hash(workPassword, 12);
 
@@ -69,46 +87,13 @@ exports.createEmployee = async (req, res) => {
       name,
       email: workEmail,
       password: hashedPassword,
-      role: role.toLowerCase(),
+      role: role.toLowerCase(), // 'admin' or 'employee'
     }).save();
 
-    // 🔀 SPLIT LOGIC: Check if admin or employee
-    if (role.toLowerCase() === "admin") {
-      // Create ADMIN in admins collection
-      const admin = await new Admin({
-        userId: user._id,
-        name,
-        email: workEmail,
-        password: hashedPassword,
-        role: "admin",
-        phone,
-        department,
-        isActive: true,
-      }).save();
-
-      return res.status(201).json({
-        message: "Admin created successfully",
-        admin,
-      });
-    }
-
-    // Create EMPLOYEE in employees collection
-    if (!position || !employeeId) {
-      return res.status(400).json({ message: "Position and Employee ID are required for employees" });
-    }
-
-    // Check for existing Employee ID or Email
-    const existingEmployee = await Employee.findOne({
-      $or: [{ employeeId }, { personalEmail }],
-    });
-    if (existingEmployee) {
-      return res.status(400).json({ message: "Employee with this ID or email already exists" });
-    }
-
+    // Create Employee record
     const employee = await new Employee({
       employeeId,
       name,
-      phone,
       personalEmail,
       workEmail,
       dateOfBirth,
@@ -116,34 +101,36 @@ exports.createEmployee = async (req, res) => {
       department,
       position,
       workPassword,
-      role: "Employee",
+      role, // 👈 sets 'Admin' or 'Employee'
       userId: user._id,
     }).save();
 
+   
     res.status(201).json({
-      message: "Employee created successfully",
+      message: `${role} created successfully`,
       employee,
     });
   } catch (error) {
     console.error("Create Employee Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
 
 exports.getAdminDetails = async (req, res) => {
   try {
-    const userId = req.query.id;
+    const adminId = req.query.id;
 
-    console.log("Fetching admin for userId:", userId);
+    console.log("demo : ",adminId);
+    
 
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
+    // if (!adminId) {
+    //   return res.status(400).json({ message: "Admin ID is required" });
+    // }
 
-    // Find admin by userId (link to User collection)
-    const admin = await Admin.findOne({ userId }).select("-password");
-    console.log("Admin found:", admin);
+    const admin = await Admin.findById(adminId).select("-password");
+    console.log("admin : ",admin);
+    
 
     if (!admin) {
       return res.status(404).json({ message: "Admin not found" });
@@ -159,7 +146,6 @@ exports.getAdminDetails = async (req, res) => {
   }
 };
 
-
 // ✅ Admin: Update employee details
 exports.updateEmployee = async (req, res) => {
   try {
@@ -167,7 +153,6 @@ exports.updateEmployee = async (req, res) => {
 
     const {
       name,
-      phone,
       personalEmail,
       dateOfBirth,
       dateOfJoining,
@@ -181,7 +166,6 @@ exports.updateEmployee = async (req, res) => {
       req.params.id,
       {
         name,
-        phone,
         personalEmail,
         dateOfBirth,
         dateOfJoining,
@@ -264,28 +248,10 @@ exports.reviewLeaveRequest = async (req, res) => {
         reviewedBy: req.user.userId,
       },
       { new: true }
-    ).populate("employeeId", "name department employeeId availableLeaves");
+    ).populate("employeeId", "name department employeeId");
 
     if (!leaveRequest)
       return res.status(404).json({ message: "Leave request not found" });
-
-    // ✅ If approved, decrease available leaves
-    if (status === "Approved") {
-      const fromDate = new Date(leaveRequest.fromDate);
-      const toDate = new Date(leaveRequest.toDate);
-      
-      // Calculate number of days (inclusive of both start and end dates)
-      const daysDiff = Math.ceil((toDate - fromDate) / (1000 * 60 * 60 * 24)) + 1;
-      
-      // Update employee's available leaves
-      const employee = await Employee.findByIdAndUpdate(
-        leaveRequest.employeeId,
-        { $inc: { availableLeaves: -daysDiff } },
-        { new: true }
-      );
-
-      console.log(`Leave approved for employee ${employee.name}. Days deducted: ${daysDiff}. Remaining leaves: ${employee.availableLeaves}`);
-    }
 
     res.status(200).json({
       message: `Leave request ${status.toLowerCase()} successfully`,
@@ -336,43 +302,24 @@ exports.getAdminDashboard = async (req, res) => {
       status: r.status,
     }));
 
-    // 6️⃣ Upcoming Birthdays (next 7 days including wraparound to next year)
+    // 6️⃣ Upcoming Birthdays (next 7 days)
     const employees = await Employee.find({}, "name dateOfBirth");
     const now = new Date();
     const upcomingBirthdays = employees
       .filter((emp) => {
         if (!emp.dateOfBirth) return false;
         const dob = new Date(emp.dateOfBirth);
-        
-        // Try birthday in current year
-        let upcomingBirthday = new Date(now.getFullYear(), dob.getMonth(), dob.getDate());
-        let diffDays = Math.ceil((upcomingBirthday - now) / (1000 * 60 * 60 * 24));
-        
-        // If birthday already passed this year, check next year
-        if (diffDays < 0) {
-          upcomingBirthday = new Date(now.getFullYear() + 1, dob.getMonth(), dob.getDate());
-          diffDays = Math.ceil((upcomingBirthday - now) / (1000 * 60 * 60 * 24));
-        }
-        
-        // Return true if birthday is within next 7 days
+        const upcomingBirthday = new Date(now.getFullYear(), dob.getMonth(), dob.getDate());
+        const diffDays = Math.ceil((upcomingBirthday - now) / (1000 * 60 * 60 * 24));
         return diffDays >= 0 && diffDays <= 7;
       })
-      .map((emp) => {
-        const dob = new Date(emp.dateOfBirth);
-        return {
-          name: emp.name,
-          date: new Date(emp.dateOfBirth).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-        };
-      })
-      .sort((a, b) => {
-        // Sort by day number to show closest birthdays first
-        const aDay = parseInt(a.date.split(" ")[1]);
-        const bDay = parseInt(b.date.split(" ")[1]);
-        return aDay - bDay;
-      });
+      .map((emp) => ({
+        name: emp.name,
+        date: new Date(emp.dateOfBirth).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+      }));
 
     // ✅ Response
     res.status(200).json({
@@ -385,70 +332,5 @@ exports.getAdminDashboard = async (req, res) => {
   } catch (error) {
     console.error("Error fetching admin dashboard:", error);
     res.status(500).json({ message: "Server error fetching admin dashboard" });
-  }
-};
-
-// ✅ Admin: Update admin profile
-exports.updateAdminProfile = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, phone, department } = req.body;
-
-    if (!id) {
-      return res.status(400).json({ message: "Admin ID is required" });
-    }
-
-    // Update admin record by _id
-    const admin = await Admin.findByIdAndUpdate(
-      id,
-      { name, phone, department },
-      { new: true, runValidators: true }
-    ).select("-password");
-
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found" });
-    }
-
-    res.status(200).json({
-      message: "Admin profile updated successfully",
-      admin,
-    });
-  } catch (error) {
-    console.error("Error updating admin profile:", error);
-    res.status(500).json({ message: "Server error updating admin profile" });
-  }
-};
-
-// ✅ Admin: Change password
-exports.changePassword = async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Both fields are required' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password too short (min 6 chars)' });
-    }
-
-    const user = await User.findById(req.user.userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Incorrect current password' });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    user.password = hashedPassword;
-    await user.save();
-
-    res.json({ message: 'Password changed successfully' });
-  } catch (error) {
-    console.error('Change Password Error:', error);
-    res.status(500).json({ message: 'Server error' });
   }
 };

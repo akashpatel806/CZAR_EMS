@@ -5,8 +5,8 @@ const { getAllHolidays, getHolidaysByYear, addHoliday, updateHoliday, deleteHoli
 const router = express.Router();
 
 router.get('/', getAllHolidays);
-router.post('/addHoliday', verifyToken, verifyAdmin, addHoliday);
 router.get('/:year', verifyToken, getHolidaysByYear);
+router.post('/addHoliday',  addHoliday);
 router.put('/:id', verifyToken, verifyAdmin, updateHoliday);
 router.delete('/:id', verifyToken, verifyAdmin, deleteHoliday);
 

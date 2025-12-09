@@ -3,12 +3,6 @@ const bcrypt =  require("bcryptjs");
 
 const adminSchema = new mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: false,
-    },
-
     name: {
       type: String,
       required: [true, "Admin name is required"],
