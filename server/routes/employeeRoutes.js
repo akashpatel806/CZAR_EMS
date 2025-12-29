@@ -3,23 +3,12 @@ const path = require('path');
 const multer = require('multer');
 const { verifyToken } = require('../middleware/authMiddleware');
 const { getProfile, changePassword, submitLeaveRequest, getMyLeaveRequests, getEmployeeDashboard, updateProfile, uploadProfilePhoto } = require('../controller/employeeController');
-const { getMyDocuments, uploadMyDocument, getMySalarySlips, deleteSalarySlip, uploadMySalarySlip } = require('../controller/employeeDocumentController');
+const { getMyDocuments, uploadMyDocument, getMySalarySlips, deleteSalarySlip, uploadMySalarySlip, viewDocument } = require('../controller/employeeDocumentController');
 
 const router = express.Router();
 
-// Configure multer for document uploads with sanitized filenames
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '../uploads/documents/'));
-    },
-    filename: (req, file, cb) => {
-        // Sanitize filename by replacing spaces and special characters
-        const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        cb(null, `doc_${Date.now()}_${sanitizedName}`);
-    }
-});
-
-const upload = multer({ storage });
+// Configure multer for document uploads (memory storage for database)
+const upload = multer({ storage: multer.memoryStorage() });
 const profileUpload = multer({ dest: path.join(__dirname, '../../uploads/') });
 
 router.get('/profile', verifyToken, getProfile);
@@ -29,6 +18,7 @@ router.put('/change-password', verifyToken, changePassword);
 router.post('/leave-requests', verifyToken, submitLeaveRequest);
 router.get('/my-leave-requests', verifyToken, getMyLeaveRequests);
 router.get('/documents', verifyToken, getMyDocuments);
+router.get('/documents/view/:docId', verifyToken, viewDocument);
 router.post('/upload-document', verifyToken, upload.single('file'), uploadMyDocument);
 router.post('/upload-profile-photo', verifyToken, profileUpload.single('profilePhoto'), uploadProfilePhoto);
 

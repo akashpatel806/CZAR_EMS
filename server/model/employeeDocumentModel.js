@@ -8,6 +8,18 @@ const documentSubSchema = new mongoose.Schema({
     },
     filename: {
         type: String,
+        required: false
+    },
+    fileData: {
+        type: Buffer,
+        required: false
+    },
+    contentType: {
+        type: String,
+        default: 'application/pdf'
+    },
+    originalName: {
+        type: String,
         required: true
     },
     uploadDate: {
@@ -66,6 +78,18 @@ const salarySlipSubSchema = new mongoose.Schema({
         max: new Date().getFullYear() + 10
     },
     filename: {
+        type: String,
+        required: false
+    },
+    fileData: {
+        type: Buffer,
+        required: false
+    },
+    contentType: {
+        type: String,
+        default: 'application/pdf'
+    },
+    originalName: {
         type: String,
         required: true
     },

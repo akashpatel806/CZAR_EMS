@@ -34,7 +34,7 @@ const bcrypt = require('bcryptjs');
 const DEPARTMENTS = [
   'IT',
   'PRODUCTION',
-  'R&D',
+  'RESEARCH AND DEVELOPMENT',
   'SUPPORT',
   'HR',
   'FINANCE',
@@ -67,7 +67,10 @@ const employeeSchema = new mongoose.Schema({
 
   phone: String,
   address: String,
-  profilePhoto: String,
+  profilePhoto: {
+    data: Buffer,
+    contentType: String
+  },
   salary: { type: Number, min: 0 },
 
   workPassword: String,

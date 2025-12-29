@@ -8,14 +8,16 @@ require('dotenv').config();
 const connectToDB = async () => {
   try {
     // Use Atlas connection string from .env, fallback to local for development
-    const mongoUri = process.env.MONGODB_URI;
+    const mongoUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/ems";
+    // const mongoUri = "mongodb://127.0.0.1:27017/ems";
+    console.log("mongoUri : ", mongoUri);
     await mongoose.connect(mongoUri);
     console.log('✅ MongoDB connected successfully');
   } catch (atlasError) {
     console.error('❌ MongoDB Atlas connection error:', atlasError.message);
     console.log('🔄 Attempting to connect to local MongoDB...');
     try {
-      await mongoose.connect('');
+      await mongoose.connect(mongoUri);
       console.log('✅ Connected to local MongoDB successfully');
     } catch (localError) {
       console.error('❌ Local MongoDB connection error:', localError.message);
@@ -28,10 +30,10 @@ const connectToDB = async () => {
 const createDefaultAdmin = async () => {
   const adminCount = await User.countDocuments({ role: 'admin' });
   if (adminCount === 0) {
-    const hashedPassword = await bcrypt.hash('admin123', 12);
+    const hashedPassword = await bcrypt.hash('12345', 12);
     const user = await new User({
-      name: 'Admin User',
-      email: 'admin@czarcore.com',
+      name: 'Admin',
+      email: 'admin@test.com',
       password: hashedPassword,
       role: 'admin'
     }).save();
@@ -40,8 +42,8 @@ const createDefaultAdmin = async () => {
     const Admin = require('../model/adminModel');
     await new Admin({
       userId: user._id,
-      name: 'Admin User',
-      email: 'admin@czarcore.com',
+      name: 'Admin',
+      email: 'admin@test.com',
       password: hashedPassword,
       role: 'admin',
       phone: '',
@@ -49,7 +51,7 @@ const createDefaultAdmin = async () => {
       isActive: true,
     }).save();
 
-    console.log('✅ Default admin created: admin@czarcore.com / admin123');
+    console.log('✅ Default admin created: email : admin@test.com, password : 12345');
   }
 };
 
@@ -74,10 +76,10 @@ const createDefaultEmployee = async () => {
 
   const empCount = await User.countDocuments({ role: 'employee' });
   if (empCount === 0) {
-    const hashedPassword = await bcrypt.hash('employee123', 12);
+    const hashedPassword = await bcrypt.hash('12345', 12);
     const user = await new User({
-      name: 'Default Employee',
-      email: 'employee@czarcore.com',
+      name: 'test emp',
+      email: 'employee@test.com',
       password: hashedPassword,
       role: 'employee'
     }).save();
@@ -85,9 +87,9 @@ const createDefaultEmployee = async () => {
     await new Employee({
       userId: user._id,
       employeeId: 1,
-      name: 'Default Employee',
+      name: 'test emp',
       personalEmail: 'employee@personal.com',
-      workEmail: 'employee@czarcore.com',
+      workEmail: 'employee@test.com',
       department: 'IT',
       role: 'Employee',
       dateOfJoining: new Date(),
@@ -97,7 +99,7 @@ const createDefaultEmployee = async () => {
       position: 'Software Developer'
     }).save();
 
-    console.log('✅ Default employee created: employee@czarcore.com / employee123');
+    console.log('Default employee created: email : employee@test.com, password : 12345');
   }
 };
 

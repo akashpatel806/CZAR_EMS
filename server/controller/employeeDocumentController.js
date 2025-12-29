@@ -4,6 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 
+// Ensure uploads/documents directory exists
+const documentsDir = path.join(__dirname, '../uploads/documents');
+if (!fs.existsSync(documentsDir)) {
+    fs.mkdirSync(documentsDir, { recursive: true });
+}
+
 // Upload document
 const uploadDocument = async (req, res) => {
     try {
@@ -54,11 +60,21 @@ const uploadDocument = async (req, res) => {
         }
 
 
+        if (file.mimetype !== 'application/pdf') {
+            return res.status(400).json({ message: 'Only PDF files are allowed' });
+        }
+
         let employeeDoc = await EmployeeDocument.findOne({ employeeId });
 
         if (!employeeDoc) {
             employeeDoc = new EmployeeDocument({ employeeId, documents: [], salarySlips: [] });
         }
+
+        // Generate unique filename (kept for reference, optional)
+        const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${file.originalname}`;
+
+        // Removed file system write
+        // fs.writeFileSync(filePath, file.buffer);
 
         if (type === 'salary') {
             // Handle salary slips separately in salarySlips array
@@ -68,18 +84,18 @@ const uploadDocument = async (req, res) => {
                 slip.toMonth === parseInt(toMonth) && slip.toYear === parseInt(toYear)
             );
             if (existingIndex !== -1) {
-                // Delete old file if exists
-                const oldFilePath = path.join(__dirname, '../../uploads/documents/', employeeDoc.salarySlips[existingIndex].filename);
-                if (fs.existsSync(oldFilePath)) {
-                    fs.unlinkSync(oldFilePath);
-                }
+                // Delete old file if exists (no longer needed for DB storage, just overwrite)
+
                 // Replace the salary slip
                 employeeDoc.salarySlips[existingIndex] = {
                     fromMonth: parseInt(fromMonth),
                     fromYear: parseInt(fromYear),
                     toMonth: parseInt(toMonth),
                     toYear: parseInt(toYear),
-                    filename: file.filename, // Use sanitized filename
+                    filename: uniqueFilename, // Optional
+                    originalName: file.originalname,
+                    fileData: file.buffer,
+                    contentType: 'application/pdf',
                     uploadDate: new Date()
                 };
             } else {
@@ -89,7 +105,10 @@ const uploadDocument = async (req, res) => {
                     fromYear: parseInt(fromYear),
                     toMonth: parseInt(toMonth),
                     toYear: parseInt(toYear),
-                    filename: file.filename, // Use sanitized filename
+                    filename: uniqueFilename, // Optional
+                    originalName: file.originalname,
+                    fileData: file.buffer,
+                    contentType: 'application/pdf',
                     uploadDate: new Date()
                 });
             }
@@ -98,22 +117,23 @@ const uploadDocument = async (req, res) => {
             // Check if document of this type already exists
             const existingIndex = employeeDoc.documents.findIndex(doc => doc.type === type);
             if (existingIndex !== -1) {
-                // Delete old file if exists
-                const oldFilePath = path.join(__dirname, '../../uploads/documents/', employeeDoc.documents[existingIndex].filename);
-                if (fs.existsSync(oldFilePath)) {
-                    fs.unlinkSync(oldFilePath);
-                }
                 // Replace the document
                 employeeDoc.documents[existingIndex] = {
                     type,
-                    filename: file.filename, // Use sanitized filename
+                    filename: uniqueFilename, // Optional
+                    originalName: file.originalname,
+                    fileData: file.buffer,
+                    contentType: 'application/pdf',
                     uploadDate: new Date()
                 };
             } else {
                 // Add new document
                 employeeDoc.documents.push({
                     type,
-                    filename: file.filename, // Use sanitized filename
+                    filename: uniqueFilename, // Optional
+                    originalName: file.originalname,
+                    fileData: file.buffer,
+                    contentType: 'application/pdf',
                     uploadDate: new Date()
                 });
             }
@@ -153,12 +173,20 @@ const getDocumentsByEmployee = async (req, res) => {
 
         // Combine regular documents and filtered salary slips into a single array
         const documents = [
-            ...employeeDoc.documents.map(doc => ({ ...doc.toObject(), _id: doc._id })),
-            ...filteredSalarySlips.map(slip => ({
-                ...slip.toObject(),
-                _id: slip._id,
-                type: 'salary'
-            }))
+            ...employeeDoc.documents.map(doc => {
+                const docObj = doc.toObject();
+                delete docObj.fileData; // Don't send huge binary data in list
+                return { ...docObj, _id: doc._id };
+            }),
+            ...filteredSalarySlips.map(slip => {
+                const slipObj = slip.toObject();
+                delete slipObj.fileData; // Don't send huge binary data in list
+                return {
+                    ...slipObj,
+                    _id: slip._id,
+                    type: 'salary'
+                };
+            })
         ].sort((a, b) => b.uploadDate - a.uploadDate);
 
         res.json({ documents });
@@ -176,7 +204,11 @@ const getMyDocuments = async (req, res) => {
             return res.status(404).json({ message: 'Employee not found' });
         }
         const employeeDoc = await EmployeeDocument.findOne({ employeeId: employee._id });
-        const documents = employeeDoc ? employeeDoc.documents.sort((a, b) => b.uploadDate - a.uploadDate) : [];
+        const documents = employeeDoc ? employeeDoc.documents.map(doc => {
+            const d = doc.toObject();
+            delete d.fileData;
+            return d;
+        }).sort((a, b) => b.uploadDate - a.uploadDate) : [];
         res.json({ documents });
     } catch (error) {
         console.error('Get my documents error:', error);
@@ -201,7 +233,7 @@ const deleteDocument = async (req, res) => {
 
         let docIndex = employeeDoc.documents.findIndex(doc => doc._id.toString() === docId);
         let isSalarySlip = false;
-        let filename = '';
+        let filename = null;
 
         if (docIndex !== -1) {
             // It's a regular document
@@ -217,11 +249,16 @@ const deleteDocument = async (req, res) => {
             }
         }
 
-        // Delete file from filesystem
-        const filePath = path.join(__dirname, '../../uploads/documents/', filename);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+        // Delete file from file system
+        // Removed file system deletion code
+        /*
+        if (filename) {
+            const filePath = path.join(documentsDir, filename);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
         }
+        */
 
         // Remove from appropriate array
         if (!isSalarySlip) {
@@ -286,6 +323,17 @@ const uploadMyDocument = async (req, res) => {
             employeeDoc = new EmployeeDocument({ employeeId: employee._id, documents: [], salarySlips: [] });
         }
 
+        // Generate unique filename
+        if (file.mimetype !== 'application/pdf') {
+            return res.status(400).json({ message: 'Only PDF files are allowed' });
+        }
+
+        // Generate unique filename (optional)
+        const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${file.originalname}`;
+
+        // Removed fs write
+        // fs.writeFileSync(filePath, file.buffer);
+
         if (type === 'salary') {
             // Handle salary slips separately in salarySlips array
             // For profile upload, use month/year as both from and to
@@ -300,18 +348,18 @@ const uploadMyDocument = async (req, res) => {
                 slip.toMonth === toMonthNum && slip.toYear === toYearNum
             );
             if (existingIndex !== -1) {
-                // Delete old file if exists
-                const oldFilePath = path.join(__dirname, '../../uploads/documents/', employeeDoc.salarySlips[existingIndex].filename);
-                if (fs.existsSync(oldFilePath)) {
-                    fs.unlinkSync(oldFilePath);
-                }
+                // Delete old file if exists (no longer needed)
+
                 // Replace the salary slip
                 employeeDoc.salarySlips[existingIndex] = {
                     fromMonth: fromMonthNum,
                     fromYear: fromYearNum,
                     toMonth: toMonthNum,
                     toYear: toYearNum,
-                    filename: file.filename,
+                    filename: uniqueFilename,
+                    originalName: file.originalname,
+                    fileData: file.buffer,
+                    contentType: 'application/pdf',
                     uploadDate: new Date()
                 };
             } else {
@@ -321,7 +369,10 @@ const uploadMyDocument = async (req, res) => {
                     fromYear: fromYearNum,
                     toMonth: toMonthNum,
                     toYear: toYearNum,
-                    filename: file.filename,
+                    filename: uniqueFilename,
+                    originalName: file.originalname,
+                    fileData: file.buffer,
+                    contentType: 'application/pdf',
                     uploadDate: new Date()
                 });
             }
@@ -330,22 +381,25 @@ const uploadMyDocument = async (req, res) => {
             // Check if document of this type already exists
             const existingIndex = employeeDoc.documents.findIndex(doc => doc.type === type);
             if (existingIndex !== -1) {
-                // Delete old file if exists
-                const oldFilePath = path.join(__dirname, '../../uploads/documents/', employeeDoc.documents[existingIndex].filename);
-                if (fs.existsSync(oldFilePath)) {
-                    fs.unlinkSync(oldFilePath);
-                }
+                // Delete old file if exists (no longer needed)
+
                 // Replace the document
                 employeeDoc.documents[existingIndex] = {
                     type,
-                    filename: file.filename,
+                    filename: uniqueFilename,
+                    originalName: file.originalname,
+                    fileData: file.buffer,
+                    contentType: 'application/pdf',
                     uploadDate: new Date()
                 };
             } else {
                 // Add new document
                 employeeDoc.documents.push({
                     type,
-                    filename: file.filename,
+                    filename: uniqueFilename,
+                    originalName: file.originalname,
+                    fileData: file.buffer,
+                    contentType: 'application/pdf',
                     uploadDate: new Date()
                 });
             }
@@ -400,6 +454,10 @@ const uploadSalarySlip = async (req, res) => {
             return res.status(400).json({ message: 'From date cannot be after to date' });
         }
 
+        if (file.mimetype !== 'application/pdf') {
+            return res.status(400).json({ message: 'Only PDF files are allowed' });
+        }
+
         let employeeDoc = await EmployeeDocument.findOne({ employeeId });
 
         if (!employeeDoc) {
@@ -412,18 +470,16 @@ const uploadSalarySlip = async (req, res) => {
             slip.toMonth === toMonthNum && slip.toYear === toYearNum
         );
         if (existingIndex !== -1) {
-            // Delete old file if exists
-            const oldFilePath = path.join(__dirname, '../../uploads/documents/', employeeDoc.salarySlips[existingIndex].filename);
-            if (fs.existsSync(oldFilePath)) {
-                fs.unlinkSync(oldFilePath);
-            }
             // Replace the salary slip
             employeeDoc.salarySlips[existingIndex] = {
                 fromMonth: fromMonthNum,
                 fromYear: fromYearNum,
                 toMonth: toMonthNum,
                 toYear: toYearNum,
-                filename: file.filename,
+                file: undefined, // remove old schema structure if somehow present
+                fileData: file.buffer,
+                contentType: 'application/pdf',
+                originalName: file.originalname,
                 uploadDate: new Date()
             };
         } else {
@@ -433,7 +489,9 @@ const uploadSalarySlip = async (req, res) => {
                 fromYear: fromYearNum,
                 toMonth: toMonthNum,
                 toYear: toYearNum,
-                filename: file.filename,
+                fileData: file.buffer,
+                contentType: 'application/pdf',
+                originalName: file.originalname,
                 uploadDate: new Date()
             });
         }
@@ -470,7 +528,11 @@ const getSalarySlipsByEmployee = async (req, res) => {
             filteredSalarySlips = employeeDoc.salarySlips.filter(slip => slip.fromYear === yearNum);
         }
 
-        const salarySlips = filteredSalarySlips.sort((a, b) => {
+        const salarySlips = filteredSalarySlips.map(slip => {
+            const s = slip.toObject();
+            delete s.fileData;
+            return s;
+        }).sort((a, b) => {
             if (a.toYear !== b.toYear) return b.toYear - a.toYear;
             return b.toMonth - a.toMonth;
         });
@@ -491,7 +553,11 @@ const getMySalarySlips = async (req, res) => {
             return res.status(404).json({ message: 'Employee not found' });
         }
         const employeeDoc = await EmployeeDocument.findOne({ employeeId: employee._id });
-        const salarySlips = employeeDoc ? employeeDoc.salarySlips.sort((a, b) => {
+        const salarySlips = employeeDoc ? employeeDoc.salarySlips.map(slip => {
+            const s = slip.toObject();
+            delete s.fileData;
+            return s;
+        }).sort((a, b) => {
             if (a.toYear !== b.toYear) return b.toYear - a.toYear;
             return b.toMonth - a.toMonth;
         }) : [];
@@ -515,12 +581,6 @@ const deleteSalarySlip = async (req, res) => {
         const slipIndex = employeeDoc.salarySlips.findIndex(slip => slip._id.toString() === slipId);
         if (slipIndex === -1) {
             return res.status(404).json({ message: 'Salary slip not found' });
-        }
-
-        // Delete file from filesystem
-        const filePath = path.join(__dirname, '../../uploads/documents/', employeeDoc.salarySlips[slipIndex].filename);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
         }
 
         // Remove from array
@@ -581,24 +641,25 @@ const uploadMySalarySlip = async (req, res) => {
             employeeDoc = new EmployeeDocument({ employeeId: employee._id, documents: [], salarySlips: [] });
         }
 
+        if (file.mimetype !== 'application/pdf') {
+            return res.status(400).json({ message: 'Only PDF files are allowed' });
+        }
+
         // Check if salary slip for this period already exists
         const existingIndex = employeeDoc.salarySlips.findIndex(slip =>
             slip.fromMonth === fromMonthNum && slip.fromYear === fromYearNum &&
             slip.toMonth === toMonthNum && slip.toYear === toYearNum
         );
         if (existingIndex !== -1) {
-            // Delete old file if exists
-            const oldFilePath = path.join(__dirname, '../../uploads/documents/', employeeDoc.salarySlips[existingIndex].filename);
-            if (fs.existsSync(oldFilePath)) {
-                fs.unlinkSync(oldFilePath);
-            }
             // Replace the salary slip
             employeeDoc.salarySlips[existingIndex] = {
                 fromMonth: fromMonthNum,
                 fromYear: fromYearNum,
                 toMonth: toMonthNum,
                 toYear: toYearNum,
-                filename: file.filename,
+                fileData: file.buffer,
+                contentType: 'application/pdf',
+                originalName: file.originalname,
                 uploadDate: new Date()
             };
         } else {
@@ -608,7 +669,9 @@ const uploadMySalarySlip = async (req, res) => {
                 fromYear: fromYearNum,
                 toMonth: toMonthNum,
                 toYear: toYearNum,
-                filename: file.filename,
+                fileData: file.buffer,
+                contentType: 'application/pdf',
+                originalName: file.originalname,
                 uploadDate: new Date()
             });
         }
@@ -638,28 +701,45 @@ const viewDocument = async (req, res) => {
         }
 
         let doc = employeeDoc.documents.find(doc => doc._id.toString() === docId);
-        let filename = '';
+        let fileData = null;
+        let contentType = 'application/pdf';
+        let originalName = 'document.pdf';
 
         if (doc) {
-            filename = doc.filename;
+            fileData = doc.fileData;
+            contentType = doc.contentType || 'application/pdf';
+            originalName = doc.originalName;
         } else {
             // Check if it's a salary slip
             doc = employeeDoc.salarySlips.find(slip => slip._id.toString() === docId);
             if (doc) {
-                filename = doc.filename;
+                fileData = doc.fileData;
+                contentType = doc.contentType || 'application/pdf';
+                originalName = doc.originalName;
             } else {
                 return res.status(404).json({ message: 'Document not found' });
             }
         }
 
-        // Serve the file
-        const filePath = path.join(__dirname, '../../uploads/documents/', filename);
-        if (fs.existsSync(filePath)) {
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-            res.sendFile(filePath);
+        if (fileData) {
+            res.setHeader('Content-Type', contentType);
+            // res.setHeader('Content-Disposition', `inline; filename="${originalName}"`);
+            res.send(fileData);
+        } else if (doc.filename) {
+            // Fallback for legacy files
+            const filePath = path.join(documentsDir, doc.filename);
+            if (fs.existsSync(filePath)) {
+                const ext = path.extname(doc.originalName || doc.filename).toLowerCase();
+                let mime = 'application/octet-stream';
+                if (ext === '.pdf') mime = 'application/pdf';
+                // ... other types
+                res.setHeader('Content-Type', mime);
+                fs.createReadStream(filePath).pipe(res);
+            } else {
+                return res.status(404).json({ message: 'File not found on server' });
+            }
         } else {
-            res.status(404).json({ message: 'File not found' });
+            return res.status(404).json({ message: 'Document content not found' });
         }
     } catch (error) {
         console.error('View document error:', error);
