@@ -486,19 +486,19 @@ exports.reviewLeaveRequest = async (req, res) => {
             };
           }
 
-          // if (!attRecord) {
+          if (!attRecord) {
             // Create new attendance record with this day
-            // attRecord = new Attendance({
-            //   employeeId: employee.employeeId,
-            //   name: employee.name,
-            //   month,
-            //   year,
-            //   totalMonthlyHours: 0,
-            //   totalMonthlyOvertime: 0,
-            //   attendance: [dailyData]
-            // });
-          // } 
-          if(attRecord) {
+            attRecord = new Attendance({
+              employeeId: employee.employeeId,
+              name: employee.name,
+              month,
+              year,
+              totalMonthlyHours: 0,
+              totalMonthlyOvertime: 0,
+              attendance: [dailyData]
+            });
+            console.log(`Created new attendance record for ${employee.name} - ${month}/${year}`);
+          } else {
             // Update or add daily record
             const existingDaily = attRecord.attendance.find(d => d.day === day);
             if (existingDaily) {
@@ -530,6 +530,19 @@ exports.reviewLeaveRequest = async (req, res) => {
       populate: { path: "userId", select: "name" },
       select: "name department employeeId availableLeaves"
     });
+
+    // NOTIFICATION: Notify Employee
+    const { createNotification } = require('../controller/notificationController');
+    const targetEmployee = await Employee.findById(leaveRequest.employeeId);
+    if (targetEmployee && targetEmployee.userId) {
+      await createNotification(
+        targetEmployee.userId,
+        'LeaveStatus',
+        `Your leave request has been ${status}`,
+        leaveRequest._id,
+        req.user.userId
+      );
+    }
 
     res.status(200).json({
       message: `Leave request ${status.toLowerCase()} successfully`,

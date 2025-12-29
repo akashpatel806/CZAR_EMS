@@ -413,6 +413,28 @@ exports.uploadAttendance = async (req, res) => {
     // If you want to keep the uploaded file, do not delete it
     // fs.unlinkSync(FILE_PATH); // <-- Commented out to keep file
 
+    const { createNotification } = require('../controller/notificationController');
+    console.log(`[AttendanceUpload] Starting notifications for ${employees.length} employees...`);
+
+    // Notify all found employees
+    let notifCount = 0;
+    for (const emp of employees) {
+      if (emp.dbData && emp.dbData.userId) {
+        const monthName = new Date(TARGET_YEAR, TARGET_MONTH - 1).toLocaleString('default', { month: 'long' });
+        await createNotification(
+          emp.dbData.userId,
+          'Attendance',
+          `Attendance for ${monthName} ${TARGET_YEAR} has been uploaded.`,
+          null,
+          req.user.userId
+        );
+        notifCount++;
+      } else {
+        console.warn(`[AttendanceUpload] Skipping notification for ${emp.name} (No userId found)`);
+      }
+    }
+    console.log(`[AttendanceUpload] Sent ${notifCount} notifications.`);
+
     res.status(201).json({
       message: "Attendance uploaded successfully",
       count: employees.length,

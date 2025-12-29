@@ -115,7 +115,7 @@ exports.adminLogin = async (req, res) => {
       return res.status(400).json({ message: "Email and password required" });
     console.log("email password : ", email, password);
 
-    const admin = await Admin.findOne({ email }).select("password name email");
+    const admin = await Admin.findOne({ email }).select("password name email userId");
     console.log(admin);
 
     if (!admin)
@@ -131,7 +131,7 @@ exports.adminLogin = async (req, res) => {
     await admin.save();
 
     const token = jwt.sign(
-      { userId: admin._id, email: admin.email, role: "admin" },
+      { userId: admin.userId, email: admin.email, role: "admin" },
       process.env.JWT_SECRET || "czarcore_secret_key",
       { expiresIn: "24h" }
     );

@@ -4,6 +4,7 @@ const path = require('path');
 require('dotenv').config();
 
 const routes = require('./routes');
+const initCronJobs = require('./utils/cronJobs');
 const { errorHandler } = require('./middleware/errorHandler');
 const { connectToDB } = require('./config/db');
 
@@ -14,7 +15,7 @@ const PORT = process.env.PORT || 5002;
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'http://192.168.0.221:5173', 
+    'http://192.168.0.221:5173',
     'http://192.168.29.66:5173',
     'http://192.168.0.197:5173'
   ],
@@ -64,6 +65,7 @@ app.use(errorHandler);
 
 const startServer = async () => {
   await connectToDB();
+  initCronJobs();
   app.listen(PORT, '0.0.0.0', () => console.log(`server running on port ${PORT}`));
 };
 

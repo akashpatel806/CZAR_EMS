@@ -141,6 +141,19 @@ const uploadDocument = async (req, res) => {
 
         await employeeDoc.save();
 
+        const { createNotification } = require('../controller/notificationController');
+        // Get user ID of the employee
+        const targetEmployee = await Employee.findById(employeeId);
+        if (targetEmployee && targetEmployee.userId) {
+            await createNotification(
+                targetEmployee.userId,
+                'Document',
+                `A new document (${type}) has been uploaded.`,
+                employeeDoc._id,
+                req.user.userId
+            );
+        }
+
         res.status(201).json({ message: 'Document uploaded successfully', document: employeeDoc });
     } catch (error) {
         console.error('Upload error:', error);
@@ -497,6 +510,18 @@ const uploadSalarySlip = async (req, res) => {
         }
 
         await employeeDoc.save();
+
+        const { createNotification } = require('../controller/notificationController');
+        const targetEmployee = await Employee.findById(employeeId);
+        if (targetEmployee && targetEmployee.userId) {
+            await createNotification(
+                targetEmployee.userId,
+                'Document',
+                `Salary slip for ${fromMonth}/${fromYear} has been uploaded.`,
+                employeeDoc._id,
+                req.user.userId
+            );
+        }
 
         res.status(201).json({ message: 'Salary slip uploaded successfully', document: employeeDoc });
     } catch (error) {

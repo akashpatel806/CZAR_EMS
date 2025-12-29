@@ -53,21 +53,21 @@ exports.addHoliday = async (req, res) => {
   try {
 
     console.log("function called");
-    
+
     let { name, fromDate, toDate, type } = req.body;
 
     console.log(req.body);
-    
+
 
     if (!name || !fromDate || !toDate || !type) {
       return res.status(400).json({ message: "All fields are required" });
     }
-const start = new Date(fromDate);
-const end = new Date(toDate);
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
 
-if (start.getTime() > end.getTime()) {
-  return res.status(400).json({ message: "From date cannot be after To date" });
-}
+    if (start.getTime() > end.getTime()) {
+      return res.status(400).json({ message: "From date cannot be after To date" });
+    }
 
     const year = start.getFullYear();
 
@@ -97,6 +97,28 @@ if (start.getTime() > end.getTime()) {
     });
 
     await holiday.save();
+
+    // NOTIFICATION: Notify all users about the new holiday
+    const { createNotification } = require('../controller/notificationController');
+    const User = require('../model/userModel');
+    const users = await User.find({});
+    console.log(`[Holiday] Found ${users.length} users to notify.`);
+
+    for (const user of users) {
+      console.log(`[Holiday] Notifying user: ${user.name} (${user._id})`);
+      const isSingleDay = holiday.fromDate.toDateString() === holiday.toDate.toDateString();
+      const message = isSingleDay
+        ? `New Holiday: ${holiday.name} on ${holiday.fromDate.toDateString()}.`
+        : `New Holiday: ${holiday.name} from ${holiday.fromDate.toDateString()} to ${holiday.toDate.toDateString()}.`;
+
+      await createNotification(
+        user._id,
+        'Holiday',
+        message,
+        holiday._id,
+        req.user.userId
+      );
+    }
 
     res.status(201).json({
       message:

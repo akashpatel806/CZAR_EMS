@@ -125,6 +125,22 @@ const submitLeaveRequest = async (req, res) => {
 
     await leaveRequest.save();
 
+    // NOTIFICATION: Notify all Admins
+    const { createNotification } = require('../controller/notificationController');
+    const admins = await User.find({ role: { $regex: /^admin$/i } }); // Case insensitive check
+    console.log(`[LeaveRequest] Found ${admins.length} admins to notify.`);
+
+    for (const admin of admins) {
+      console.log(`[LeaveRequest] Notifying admin: ${admin.name} (${admin._id})`);
+      await createNotification(
+        admin._id,
+        'LeaveRequest',
+        `New Leave Request from ${employee.name}`,
+        leaveRequest._id,
+        req.user.userId
+      );
+    }
+
     res.status(201).json({ message: 'Leave request submitted successfully', leaveRequest });
   } catch (error) {
     console.error('Submit Leave Error:', error);
