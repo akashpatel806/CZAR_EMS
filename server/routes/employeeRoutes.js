@@ -7,19 +7,8 @@ const { getMyDocuments, uploadMyDocument, getMySalarySlips, deleteSalarySlip, up
 
 const router = express.Router();
 
-// Configure multer for document uploads with sanitized filenames
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '../uploads/documents/'));
-    },
-    filename: (req, file, cb) => {
-        // Sanitize filename by replacing spaces and special characters
-        const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        cb(null, `doc_${Date.now()}_${sanitizedName}`);
-    }
-});
-
-const upload = multer({ storage });
+// Configure multer for document uploads (memory storage for database)
+const upload = multer({ storage: multer.memoryStorage() });
 const profileUpload = multer({ dest: path.join(__dirname, '../../uploads/') });
 
 router.get('/profile', verifyToken, getProfile);

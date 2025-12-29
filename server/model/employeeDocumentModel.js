@@ -8,7 +8,15 @@ const documentSubSchema = new mongoose.Schema({
     },
     filename: {
         type: String,
-        required: true
+        required: false
+    },
+    fileData: {
+        type: Buffer,
+        required: false
+    },
+    contentType: {
+        type: String,
+        default: 'application/pdf'
     },
     originalName: {
         type: String,
@@ -71,7 +79,15 @@ const salarySlipSubSchema = new mongoose.Schema({
     },
     filename: {
         type: String,
-        required: true
+        required: false
+    },
+    fileData: {
+        type: Buffer,
+        required: false
+    },
+    contentType: {
+        type: String,
+        default: 'application/pdf'
     },
     originalName: {
         type: String,
